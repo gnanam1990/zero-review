@@ -26,36 +26,68 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Always allow global quit/help first.
+		if key.Matches(msg, m.Keys.Quit) {
+			return m, tea.Quit
+		}
+		if key.Matches(msg, m.Keys.Help) {
+			m.ShowHelp = !m.ShowHelp
+			return m, nil
+		}
+		// Esc cancels forms and modals before anything else.
+		if key.Matches(msg, m.Keys.Back) {
+			if m.Confirm != nil {
+				m.Confirm = nil
+				return m, nil
+			}
+			if m.ShowHelp {
+				m.ShowHelp = false
+				return m, nil
+			}
+			if m.Screen == core.ScreenFindingDetail {
+				m.Screen = core.ScreenFindings
+				return m, nil
+			}
+			if m.Screen == core.ScreenPRInput || m.Screen == core.ScreenSettings {
+				m.Screen = core.ScreenWelcome
+				return m, nil
+			}
+			if m.Screen != core.ScreenWelcome && m.Screen != core.ScreenDashboard {
+				m.Screen = core.ScreenDashboard
+				return m, nil
+			}
+		}
+
+		// Delegate to active Huh form first so Tab/↑/↓/Enter actually reach it.
+		if m.Screen == core.ScreenPRInput && m.PRForm != nil {
+			f, cmd := m.PRForm.Update(msg)
+			if form, ok := f.(*huh.Form); ok {
+				m.PRForm = form
+			}
+			if m.PRForm.State == huh.StateCompleted {
+				m.applyPRInput()
+				m.Screen = core.ScreenLoadingReview
+				return m, tickCmd()
+			}
+			return m, cmd
+		}
+
+		if m.Screen == core.ScreenSettings && m.SettingsForm != nil {
+			f, cmd := m.SettingsForm.Update(msg)
+			if form, ok := f.(*huh.Form); ok {
+				m.SettingsForm = form
+			}
+			if m.SettingsForm.State == huh.StateCompleted {
+				m.applySettings()
+				m.Screen = core.ScreenWelcome
+			}
+			return m, cmd
+		}
+
 		return m.handleKey(msg)
 
 	case tickMsg:
 		return m.advanceLoading()
-	}
-
-	// Delegate to active form if present.
-	if m.Screen == core.ScreenPRInput && m.PRForm != nil {
-		f, cmd := m.PRForm.Update(msg)
-		if form, ok := f.(*huh.Form); ok {
-			m.PRForm = form
-		}
-		if m.PRForm.State == huh.StateCompleted {
-			m.applyPRInput()
-			m.Screen = core.ScreenLoadingReview
-			return m, tickCmd()
-		}
-		return m, cmd
-	}
-
-	if m.Screen == core.ScreenSettings && m.SettingsForm != nil {
-		f, cmd := m.SettingsForm.Update(msg)
-		if form, ok := f.(*huh.Form); ok {
-			m.SettingsForm = form
-		}
-		if m.SettingsForm.State == huh.StateCompleted {
-			m.applySettings()
-			m.Screen = core.ScreenWelcome
-		}
-		return m, cmd
 	}
 
 	return m, nil
@@ -85,11 +117,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if m.Screen == core.ScreenFindingDetail {
 			m.Screen = core.ScreenFindings
-			return m, nil
-		}
-		// On forms, Esc just cancels back to Welcome instead of going to Dashboard.
-		if m.Screen == core.ScreenPRInput || m.Screen == core.ScreenSettings {
-			m.Screen = core.ScreenWelcome
 			return m, nil
 		}
 		if m.Screen != core.ScreenWelcome && m.Screen != core.ScreenDashboard {
