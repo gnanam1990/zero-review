@@ -1,0 +1,15 @@
+# Binaries
+zero-review
+*.exe
+
+# Test artifacts
+*.out
+*.test
+
+# Local reports
+.zero-review/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
