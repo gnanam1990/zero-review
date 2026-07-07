@@ -1,5 +1,5 @@
 # Binaries
-zero-review
+/zero-review
 *.exe
 
 # Test artifacts
