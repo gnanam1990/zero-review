@@ -44,7 +44,7 @@ func ValidateAll(findings []Finding, data PRData, confidenceMin int) []Finding {
 			f.LineEnd = f.LineStart
 		}
 		if f.Status == "" {
-			f.Status = StatusPending
+			f.Status = FindingStatusPending
 		}
 		if f.DiffSide == "" {
 			f.DiffSide = "RIGHT"

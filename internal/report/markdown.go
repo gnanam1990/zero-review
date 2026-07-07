@@ -31,10 +31,10 @@ func SaveMarkdown(result review.Result, dir string) (string, error) {
 
 	b.WriteString("## Summary\n\n")
 	fmt.Fprintf(&b, "Total findings: %d | Approved: %d | Rejected: %d | Edited: %d\n\n",
-		len(result.Findings), countStatus(result.Findings, review.StatusApproved), countStatus(result.Findings, review.StatusRejected), countStatus(result.Findings, review.StatusEdited))
+		len(result.Findings), countStatus(result.Findings, review.FindingStatusApproved), countStatus(result.Findings, review.FindingStatusRejected), countStatus(result.Findings, review.FindingStatusEdited))
 
-	writeSection(&b, "Approved Findings", filterStatus(result.Findings, review.StatusApproved, review.StatusEdited))
-	writeSection(&b, "Rejected Findings", filterStatus(result.Findings, review.StatusRejected))
+	writeSection(&b, "Approved Findings", filterStatus(result.Findings, review.FindingStatusApproved, review.FindingStatusEdited))
+	writeSection(&b, "Rejected Findings", filterStatus(result.Findings, review.FindingStatusRejected))
 
 	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil { //nolint:gosec
 		return "", err
@@ -64,7 +64,7 @@ func writeSection(b *strings.Builder, title string, findings []review.Finding) {
 	}
 }
 
-func countStatus(findings []review.Finding, status review.Status) int {
+func countStatus(findings []review.Finding, status review.FindingStatus) int {
 	c := 0
 	for _, f := range findings {
 		if f.Status == status {
@@ -74,7 +74,7 @@ func countStatus(findings []review.Finding, status review.Status) int {
 	return c
 }
 
-func filterStatus(findings []review.Finding, statuses ...review.Status) []review.Finding {
+func filterStatus(findings []review.Finding, statuses ...review.FindingStatus) []review.Finding {
 	var out []review.Finding
 	for _, f := range findings {
 		for _, s := range statuses {

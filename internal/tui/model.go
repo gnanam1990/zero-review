@@ -1,178 +1,149 @@
 package tui
 
 import (
-	"strconv"
+	"time"
 
-	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/gnanam1990/zero-review/internal/config"
-	"github.com/gnanam1990/zero-review/internal/github"
 	"github.com/gnanam1990/zero-review/internal/review"
+	"github.com/gnanam1990/zero-review/internal/tui/core"
 )
 
-// Screen is the current TUI screen.
-type Screen int
-
-const (
-	ScreenSummary Screen = iota
-	ScreenFindings
-	ScreenDetail
-	ScreenDiff
-	ScreenChat
-	ScreenApproval
-	ScreenFinal
-)
-
-// Model is the Bubble Tea model for zero-review.
+// Model is the top-level Bubble Tea model for Zero Review.
 type Model struct {
-	Styles    Styles
-	Screen    Screen
-	Result    review.Result
-	Findings  []review.Finding
-	Cursor    int
-	Selected  *review.Finding
-	Chat      []ChatMessage
-	ChatInput string
-	ChatMode  string // "chat" | "edit"
-	Width     int
-	Height    int
-	Err       error
+	// Core
+	Screen  core.Screen
+	Theme   *core.Theme
+	Layout  core.Layout
+	Keys    core.KeyMap
+	Session *review.ReviewSession
+	Config  config.Options
 
-	GitHub  github.Client
-	Options config.Options
+	// Navigation
+	SidebarIndex int
+	ShowHelp     bool
 
-	// Final state
-	Summary     string
-	Posted      int
-	ReportPaths []string
+	// Findings
+	FindingsCursor  int
+	SelectedFinding *int // index into Session.Findings
+	SeverityFilter  string
 
-	// Approval state
-	ApprovedCount int
-	RejectedCount int
-	EditedCount   int
-	PostMode      string
-	NoPost        bool
+	// Chat
+	ChatMessages []core.ChatMessage
+	ChatInput    textarea.Model
+	ChatViewport viewport.Model
+	ChatContext  string
 
-	table table.Model
+	// PR Input form (Huh)
+	PRForm     *huh.Form
+	PRURLInput textinput.Model
+	Provider   string
+	Mode       string
+	SaveReport bool
+	NoPost     bool
+
+	// Settings form (Huh)
+	SettingsForm *huh.Form
+
+	// Loading
+	LoadingSteps []core.LoadingStep
+	LoadingTip   string
+
+	// Modal / Toast
+	Confirm     *ConfirmPrompt
+	Toast       *core.Toast
+	CommandOpen bool
+
+	// Misc
+	Width  int
+	Height int
 }
 
-// ChatMessage is one chat turn.
-type ChatMessage struct {
-	Role string // user | ai
-	Text string
+// ConfirmPrompt is a reusable yes/no modal.
+type ConfirmPrompt struct {
+	Title   string
+	Body    string
+	YesText string
+	NoText  string
+	Action  string
 }
 
-// NewModel creates the initial TUI model.
-func NewModel(result review.Result, gh github.Client, opts config.Options) Model {
+// NewModel creates the initial TUI model in the welcome screen.
+func NewModel(theme *core.Theme) Model {
 	m := Model{
-		Styles:   NewStyles(),
-		Screen:   ScreenSummary,
-		Result:   result,
-		Findings: result.Findings,
-		GitHub:   gh,
-		Options:  opts,
-		NoPost:   opts.NoPost,
-		PostMode: "comment",
-		Chat: []ChatMessage{
-			{Role: "ai", Text: "Review complete. I found " + countString(len(result.Findings), "finding") + ". Use Enter to inspect, A to approve, R to reject, E to edit."},
-		},
+		Screen:       core.ScreenWelcome,
+		Theme:        theme,
+		Layout:       core.NewLayout(80, 24),
+		Keys:         core.DefaultKeyMap(),
+		Config:       config.DefaultOptions(),
+		Provider:     "fake",
+		Mode:         "balanced",
+		SaveReport:   true,
+		NoPost:       false,
+		LoadingSteps: defaultLoadingSteps(),
+		LoadingTip:   "Zero Review never posts comments without your approval.",
 	}
-	m.table = newFindingsTable(m.Styles, m.Findings)
+
+	m.ChatInput = textarea.New()
+	m.ChatInput.Placeholder = "Ask about this PR..."
+	m.ChatInput.SetWidth(40)
+	m.ChatInput.SetHeight(3)
+
+	m.PRURLInput = textinput.New()
+	m.PRURLInput.Placeholder = "https://github.com/org/repo/pull/123"
+	m.PRURLInput.Focus()
+
 	return m
 }
 
-func countString(n int, word string) string {
-	if n == 1 {
-		return "1 " + word
-	}
-	return strconv.Itoa(n) + " " + word + "s"
+// NewModelWithSession creates the TUI model already populated with a review session.
+func NewModelWithSession(theme *core.Theme, session *review.ReviewSession) Model {
+	m := NewModel(theme)
+	m.Session = session
+	m.Screen = core.ScreenDashboard
+	return m
 }
 
-func itoa(n int) string { return strconv.Itoa(n) }
+func defaultLoadingSteps() []core.LoadingStep {
+	return []core.LoadingStep{
+		{Label: "Parse PR link"},
+		{Label: "Fetch PR metadata"},
+		{Label: "Load changed files"},
+		{Label: "Build diff context"},
+		{Label: "Ask AI reviewer"},
+		{Label: "Validate line anchors"},
+		{Label: "Remove noisy findings"},
+		{Label: "Generate report"},
+	}
+}
 
 // Init is the initial command.
-func (m Model) Init() tea.Cmd { return nil }
-
-// Update handles messages.
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.Width = msg.Width
-		m.Height = msg.Height
-		m.table.SetWidth(msg.Width - 6)
-		m.table.SetHeight(msg.Height - 12)
-		return m, nil
-
-	case reportsSavedMsg:
-		if msg.Err != nil {
-			m.Err = msg.Err
-		} else {
-			m.ReportPaths = msg.Paths
-		}
-		return m, nil
-
-	case tea.KeyMsg:
-		return m.handleKey(msg)
-	}
-
-	if m.Screen == ScreenFindings {
-		var cmd tea.Cmd
-		m.table, cmd = m.table.Update(msg)
-		m.Cursor = m.table.Cursor()
-		return m, cmd
-	}
-
-	return m, nil
+func (m Model) Init() tea.Cmd {
+	return nil
 }
 
-func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
-
-	switch key {
-	case "q", "ctrl+c":
-		return m, tea.Quit
+// SelectedFindingPtr returns the selected finding or nil.
+func (m Model) SelectedFindingPtr() *review.Finding {
+	if m.Session == nil || m.SelectedFinding == nil {
+		return nil
 	}
-
-	switch m.Screen {
-	case ScreenSummary:
-		return handleSummaryKey(m, key)
-	case ScreenFindings:
-		return handleFindingsKey(m, key)
-	case ScreenDetail:
-		return handleDetailKey(m, key)
-	case ScreenChat:
-		return handleChatKey(m, key)
-	case ScreenApproval:
-		return handleApprovalKey(m, key)
-	case ScreenFinal:
-		if key == "enter" || key == "q" {
-			return m, tea.Quit
-		}
+	idx := *m.SelectedFinding
+	if idx < 0 || idx >= len(m.Session.Findings) {
+		return nil
 	}
-	return m, nil
+	return &m.Session.Findings[idx]
 }
 
-// View renders the active screen.
-func (m Model) View() string {
-	if m.Err != nil {
-		return m.Styles.Danger.Render("Error: "+m.Err.Error()) + "\n\n" + m.Styles.Help.Render("Press q to quit")
-	}
+// SetToast sets a transient toast message.
+func (m *Model) SetToast(message, kind string) {
+	m.Toast = &core.Toast{Message: message, Kind: kind, Until: time.Now().Add(3 * time.Second)}
+}
 
-	switch m.Screen {
-	case ScreenSummary:
-		return renderSummary(m)
-	case ScreenFindings:
-		return renderFindings(m)
-	case ScreenDetail:
-		return renderDetail(m)
-	case ScreenDiff:
-		return renderDiff(m)
-	case ScreenChat:
-		return renderChat(m)
-	case ScreenApproval:
-		return renderApproval(m)
-	case ScreenFinal:
-		return renderFinal(m)
-	}
-	return ""
+// ClearToast removes the active toast.
+func (m *Model) ClearToast() {
+	m.Toast = nil
 }

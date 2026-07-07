@@ -67,7 +67,7 @@ new file mode 100644
 	if got[0].ID != "F001" {
 		t.Fatalf("expected F001, got %s", got[0].ID)
 	}
-	if got[0].Status != StatusPending {
+	if got[0].Status != FindingStatusPending {
 		t.Fatalf("expected status pending, got %s", got[0].Status)
 	}
 

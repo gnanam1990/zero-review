@@ -20,7 +20,7 @@ func FromProviderFindings(raw []ai.ProviderFinding) []Finding {
 			SuggestedComment: r.SuggestedComment,
 			SuggestedFix:     r.SuggestedFix,
 			Evidence:         r.Evidence,
-			Status:           StatusPending,
+			Status:           FindingStatusPending,
 		})
 	}
 	return out

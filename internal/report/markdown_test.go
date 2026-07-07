@@ -31,7 +31,7 @@ func TestSaveMarkdown(t *testing.T) {
 				FilePath:         "cmd/app/main.go",
 				LineStart:        42,
 				LineEnd:          42,
-				Status:           review.StatusApproved,
+				Status:           review.FindingStatusApproved,
 				SuggestedComment: "Check nil before use.",
 			},
 		},
