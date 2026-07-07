@@ -80,6 +80,8 @@ func (k KeyMap) FooterHelp(screen Screen, layout Layout) string {
 	}
 
 	switch screen {
+	case ScreenWelcome:
+		return "←/→ nav · enter select · s start · l last report · , settings · " + base
 	case ScreenFindings:
 		return "↑/↓ move · enter open · a approve · r reject · e edit · c chat · d diff · p post · x clear filters · " + base
 	case ScreenFindingDetail:
@@ -88,7 +90,7 @@ func (k KeyMap) FooterHelp(screen Screen, layout Layout) string {
 		return "enter send · shift+enter newline · ctrl+l clear · ctrl+r regen · esc back · " + base
 	case ScreenApproval:
 		return "p post · m mode · s save · esc back · " + base
-	case ScreenPRInput:
+	case ScreenPRInput, ScreenSettings:
 		return "tab next field · shift+tab prev · enter submit · esc cancel · " + base
 	default:
 		return base

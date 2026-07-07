@@ -59,7 +59,7 @@ func (m Model) renderContent() string {
 
 	switch m.Screen {
 	case core.ScreenWelcome:
-		return screens.Welcome(m.Theme, w, h)
+		return screens.Welcome(m.Theme, m.WelcomeFocus, w, h)
 	case core.ScreenPRInput:
 		return screens.PRInput(m.Theme, m.PRForm, w, h)
 	case core.ScreenLoadingReview:

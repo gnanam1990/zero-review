@@ -92,6 +92,41 @@ func TestRejectFinding(t *testing.T) {
 	}
 }
 
+func TestWelcomeFocusNavigation(t *testing.T) {
+	m := NewModel(core.NewTheme())
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	um := updated.(Model)
+	if um.WelcomeFocus != 1 {
+		t.Fatalf("expected WelcomeFocus=1 after right, got %d", um.WelcomeFocus)
+	}
+
+	updated, _ = um.Update(tea.KeyMsg{Type: tea.KeyRight})
+	um = updated.(Model)
+	if um.WelcomeFocus != 2 {
+		t.Fatalf("expected WelcomeFocus=2 after second right, got %d", um.WelcomeFocus)
+	}
+
+	updated, _ = um.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	um = updated.(Model)
+	if um.WelcomeFocus != 1 {
+		t.Fatalf("expected WelcomeFocus=1 after left, got %d", um.WelcomeFocus)
+	}
+}
+
+func TestWelcomeShortcuts(t *testing.T) {
+	m := NewModel(core.NewTheme())
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	um := updated.(Model)
+	if um.Screen != core.ScreenPRInput {
+		t.Fatalf("expected ScreenPRInput after 's', got %v", um.Screen)
+	}
+	if cmd == nil {
+		t.Fatal("expected PR form init command")
+	}
+}
+
 func TestMockSessionHasExpectedFindings(t *testing.T) {
 	s := MockSession()
 	if len(s.Findings) != 7 {

@@ -26,6 +26,7 @@ type Model struct {
 	// Navigation
 	SidebarIndex int
 	ShowHelp     bool
+	WelcomeFocus int // 0=start, 1=last report, 2=settings
 
 	// Findings
 	FindingsCursor  int
@@ -84,6 +85,7 @@ func NewModel(theme *core.Theme) Model {
 		Mode:         "balanced",
 		SaveReport:   true,
 		NoPost:       false,
+		WelcomeFocus: 0,
 		LoadingSteps: defaultLoadingSteps(),
 		LoadingTip:   "Zero Review never posts comments without your approval.",
 	}

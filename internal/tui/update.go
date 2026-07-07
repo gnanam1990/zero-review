@@ -93,30 +93,33 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Navigation shortcuts
-	if key.Matches(msg, m.Keys.Overview) {
-		m.Screen = core.ScreenDashboard
-		return m, nil
-	}
-	if key.Matches(msg, m.Keys.Findings) {
-		m.Screen = core.ScreenFindings
-		return m, nil
-	}
-	if key.Matches(msg, m.Keys.Diff) {
-		m.Screen = core.ScreenDiff
-		return m, nil
-	}
-	if key.Matches(msg, m.Keys.Chat) {
-		m.Screen = core.ScreenChat
-		return m, nil
-	}
-	if key.Matches(msg, m.Keys.Post) {
-		m.Screen = core.ScreenApproval
-		return m, nil
-	}
-	if key.Matches(msg, m.Keys.Save) {
-		m.SetToast("Report saved", "success")
-		return m, nil
+	// Navigation shortcuts (only on review screens, not on Welcome/forms)
+	if m.Screen != core.ScreenWelcome && m.Screen != core.ScreenPRInput && m.Screen != core.ScreenSettings {
+		if key.Matches(msg, m.Keys.Overview) {
+			m.Screen = core.ScreenDashboard
+			return m, nil
+		}
+		if key.Matches(msg, m.Keys.Findings) {
+			m.Screen = core.ScreenFindings
+			return m, nil
+		}
+		if key.Matches(msg, m.Keys.Diff) {
+			m.Screen = core.ScreenDiff
+			return m, nil
+		}
+		if key.Matches(msg, m.Keys.Chat) {
+			m.Screen = core.ScreenChat
+			return m, nil
+		}
+		if key.Matches(msg, m.Keys.Post) {
+			m.Screen = core.ScreenApproval
+			return m, nil
+		}
+		if key.Matches(msg, m.Keys.Save) && m.Session != nil {
+			m.Session.ReportPath = ".zero-review/reports/pr-123-demo.md"
+			m.SetToast("Report saved", "success")
+			return m, nil
+		}
 	}
 
 	switch m.Screen {
@@ -139,20 +142,62 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleWelcomeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "left":
+		if m.WelcomeFocus > 0 {
+			m.WelcomeFocus--
+		}
+		return m, nil
+	case "right":
+		if m.WelcomeFocus < 2 {
+			m.WelcomeFocus++
+		}
+		return m, nil
+	case "tab":
+		if m.WelcomeFocus < 2 {
+			m.WelcomeFocus++
+		} else {
+			m.WelcomeFocus = 0
+		}
+		return m, nil
+	case "shift+tab":
+		if m.WelcomeFocus > 0 {
+			m.WelcomeFocus--
+		} else {
+			m.WelcomeFocus = 2
+		}
+		return m, nil
 	case "enter":
+		return m.activateWelcomeFocus()
+	case "s":
+		m.WelcomeFocus = 0
+		return m.activateWelcomeFocus()
+	case "l":
+		m.WelcomeFocus = 1
+		return m.activateWelcomeFocus()
+	case ",":
+		m.WelcomeFocus = 2
+		return m.activateWelcomeFocus()
+	}
+	return m, nil
+}
+
+func (m Model) activateWelcomeFocus() (tea.Model, tea.Cmd) {
+	switch m.WelcomeFocus {
+	case 0:
 		m.PRForm = screens.BuildPRForm(&screens.PRInputValues{
 			Provider:   m.Provider,
 			Mode:       m.Mode,
 			SaveReport: m.SaveReport,
 			NoPost:     m.NoPost,
 		})
+		m.Screen = core.ScreenPRInput
 		return m, m.PRForm.Init()
-	case "l":
+	case 1:
 		m.Session = MockSession()
 		m.Session.ReportPath = ".zero-review/reports/pr-123-demo.md"
 		m.Screen = core.ScreenReport
 		return m, nil
-	case "comma", "s":
+	case 2:
 		m.SettingsForm = screens.BuildSettingsForm(&screens.SettingsValues{
 			Provider:          m.Provider,
 			Mode:              m.Mode,
