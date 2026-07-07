@@ -29,6 +29,9 @@ func Wrap(s string, width int) string {
 
 // Truncate shortens a string with ellipsis.
 func Truncate(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
 	if len(s) <= max {
 		return s
 	}

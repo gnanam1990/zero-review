@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	core "github.com/gnanam1990/zero-review/internal/tui/core"
 )
 
@@ -33,11 +32,7 @@ func ChatPanel(theme *core.Theme, messages []core.ChatMessage, contextLabel stri
 		Height(historyHeight).
 		Render(b.String())
 
-	inputBox := theme.BorderFocused.Width(width - 2).Render(
-		theme.MutedText.Render("Type a message. Enter to send, esc to back."),
-	)
-
-	return lipgloss.JoinVertical(lipgloss.Left, history, inputBox)
+	return history
 }
 
 // QuickPrompts returns suggested chat prompts.
