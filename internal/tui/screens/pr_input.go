@@ -61,14 +61,21 @@ func BuildPRForm(values *PRInputValues) *huh.Form {
 				Affirmative("Yes").
 				Negative("No"),
 		),
-	).WithWidth(60).WithShowHelp(true)
+	).WithShowHelp(true)
 }
 
-// PRInput renders the PR input form inside a panel.
+// PRInput renders the PR input form using the full content width.
 func PRInput(theme *core.Theme, form *huh.Form, width, height int) string {
 	if form == nil {
 		return theme.PanelStyle.Width(width).Height(height).Render(theme.MutedText.Render("Form not initialized."))
 	}
+
+	formW := width - 6
+	if formW < 40 {
+		formW = 40
+	}
+	form = form.WithWidth(formW)
+
 	return lipgloss.NewStyle().
 		Width(width).
 		Height(height).

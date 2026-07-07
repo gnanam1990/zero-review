@@ -8,12 +8,16 @@ import (
 	core "github.com/gnanam1990/zero-review/internal/tui/core"
 )
 
-// CommandBar renders a simple command palette overlay.
+// CommandBar renders a simple command palette input line.
 func CommandBar(theme *core.Theme, query string, width int) string {
 	label := theme.PrimaryText.Render("> ")
-	input := theme.InputStyle.Width(width - 6).Render(query + "_")
+	display := query
+	if display == "" {
+		display = "Type a command..."
+	}
+	input := theme.InputStyle.Width(width - 6).Render(display + "_")
 	box := theme.BorderFocused.Width(width).Padding(1).Render(label + input)
-	return lipgloss.NewStyle().MarginTop(1).Render(box)
+	return lipgloss.NewStyle().Render(box)
 }
 
 // CommandSuggestions returns common commands for the palette.

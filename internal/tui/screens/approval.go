@@ -38,12 +38,13 @@ func Approval(theme *core.Theme, session *review.ReviewSession, mode PostMode, n
 	}, "\n")
 
 	modePanel := theme.PanelStyle.Width(width / 2).Render(strings.Join([]string{
-		theme.PanelTitleStyle.Render("Posting mode"),
-		fmt.Sprintf("> %s", modeLabel(mode)),
-		"  " + modeLabel(PostModeComment),
-		"  " + modeLabel(PostModeRequestChanges),
-		"  " + modeLabel(PostModeApprove),
-		"  " + modeLabel(PostModeReportOnly),
+		theme.PanelTitleStyle.Render("Posting mode (m to cycle)"),
+		fmt.Sprintf("> %s", ModeLabel(mode)),
+		"",
+		"  " + ModeLabel(PostModeComment),
+		"  " + ModeLabel(PostModeRequestChanges),
+		"  " + ModeLabel(PostModeApprove),
+		"  " + ModeLabel(PostModeReportOnly),
 	}, "\n"))
 
 	var findingLines []string
@@ -75,7 +76,7 @@ func Approval(theme *core.Theme, session *review.ReviewSession, mode PostMode, n
 	return theme.PanelStyle.Width(width).Height(height).Render(content)
 }
 
-func modeLabel(m PostMode) string {
+func ModeLabel(m PostMode) string {
 	switch m {
 	case PostModeComment:
 		return "Comment only"

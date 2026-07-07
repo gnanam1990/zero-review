@@ -11,6 +11,7 @@ import (
 	"github.com/gnanam1990/zero-review/internal/config"
 	"github.com/gnanam1990/zero-review/internal/review"
 	"github.com/gnanam1990/zero-review/internal/tui/core"
+	"github.com/gnanam1990/zero-review/internal/tui/screens"
 )
 
 // Model is the top-level Bubble Tea model for Zero Review.
@@ -39,6 +40,10 @@ type Model struct {
 	ChatViewport viewport.Model
 	ChatContext  string
 
+	// Command palette
+	CommandOpen  bool
+	CommandInput textinput.Model
+
 	// PR Input form (Huh)
 	PRForm     *huh.Form
 	PRURLInput textinput.Model
@@ -46,6 +51,7 @@ type Model struct {
 	Mode       string
 	SaveReport bool
 	NoPost     bool
+	PostMode   screens.PostMode
 
 	// Settings form (Huh)
 	SettingsForm *huh.Form
@@ -55,9 +61,8 @@ type Model struct {
 	LoadingTip   string
 
 	// Modal / Toast
-	Confirm     *ConfirmPrompt
-	Toast       *core.Toast
-	CommandOpen bool
+	Confirm *ConfirmPrompt
+	Toast   *core.Toast
 
 	// Misc
 	Width  int
@@ -85,6 +90,7 @@ func NewModel(theme *core.Theme) Model {
 		Mode:         "balanced",
 		SaveReport:   true,
 		NoPost:       false,
+		PostMode:     screens.PostModeComment,
 		WelcomeFocus: 0,
 		LoadingSteps: defaultLoadingSteps(),
 		LoadingTip:   "Zero Review never posts comments without your approval.",
@@ -94,6 +100,10 @@ func NewModel(theme *core.Theme) Model {
 	m.ChatInput.Placeholder = "Ask about this PR..."
 	m.ChatInput.SetWidth(40)
 	m.ChatInput.SetHeight(3)
+
+	m.CommandInput = textinput.New()
+	m.CommandInput.Placeholder = "Type a command..."
+	m.CommandInput.Width = 40
 
 	m.PRURLInput = textinput.New()
 	m.PRURLInput.Placeholder = "https://github.com/org/repo/pull/123"

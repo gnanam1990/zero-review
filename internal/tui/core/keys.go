@@ -74,7 +74,8 @@ func DefaultKeyMap() KeyMap {
 
 // FooterHelp returns a compact help string for the footer.
 func (k KeyMap) FooterHelp(screen Screen, layout Layout) string {
-	base := "q quit · esc back · ? help"
+	base := "q quit · esc back · ? help · / command"
+	typingBase := "ctrl+c quit · esc back"
 	if layout.ShowSidebar {
 		base = "↑/↓ nav · enter select · " + base
 	}
@@ -87,11 +88,11 @@ func (k KeyMap) FooterHelp(screen Screen, layout Layout) string {
 	case ScreenFindingDetail:
 		return "a approve · r reject · e edit · c chat · d diff · b/esc back · " + base
 	case ScreenChat:
-		return "enter send · shift+enter newline · ctrl+l clear · ctrl+r regen · esc back · " + base
+		return "enter send · ctrl+l clear · esc back · " + typingBase
 	case ScreenApproval:
 		return "p post · m mode · s save · esc back · " + base
 	case ScreenPRInput, ScreenSettings:
-		return "tab next field · shift+tab prev · enter submit · esc cancel · " + base
+		return "tab/shift+tab move · ↑/↓ select · enter confirm · esc cancel · " + typingBase
 	default:
 		return base
 	}

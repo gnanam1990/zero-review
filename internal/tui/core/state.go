@@ -16,6 +16,11 @@ type Toast struct {
 	Until   time.Time
 }
 
+// Expired reports whether the toast has passed its display window.
+func (t *Toast) Expired() bool {
+	return t == nil || time.Now().After(t.Until)
+}
+
 // LoadingStep is one item in the progress timeline.
 type LoadingStep struct {
 	Label  string

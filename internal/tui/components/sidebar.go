@@ -1,8 +1,6 @@
 package components
 
 import (
-	"strings"
-
 	"github.com/charmbracelet/lipgloss"
 	core "github.com/gnanam1990/zero-review/internal/tui/core"
 )
@@ -22,10 +20,6 @@ func Sidebar(theme *core.Theme, active core.Screen, height int) string {
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left, items...)
-	available := height - 2
-	if available > 0 {
-		content += "\n" + strings.Repeat("\n", available-1)
-	}
 
 	return theme.SidebarStyle.
 		Height(height).

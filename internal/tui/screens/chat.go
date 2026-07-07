@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/gnanam1990/zero-review/internal/review"
 	"github.com/gnanam1990/zero-review/internal/tui/components"
 	core "github.com/gnanam1990/zero-review/internal/tui/core"
 )
 
-// Chat renders the chatbot screen.
-func Chat(theme *core.Theme, session *review.ReviewSession, messages []core.ChatMessage, finding *review.Finding, width, height int) string {
+// Chat renders the chatbot screen including the live textarea input.
+func Chat(theme *core.Theme, session *review.ReviewSession, messages []core.ChatMessage, input textarea.Model, finding *review.Finding, width, height int) string {
 	contextLabel := ""
 	if session != nil {
 		contextLabel = fmt.Sprintf("PR #%d", session.PR.Number)
@@ -20,10 +21,14 @@ func Chat(theme *core.Theme, session *review.ReviewSession, messages []core.Chat
 		contextLabel += fmt.Sprintf(" · %s:%d", finding.FilePath, finding.LineStart)
 	}
 
-	historyHeight := height - 8
+	inputHeight := 4
+	historyHeight := height - inputHeight - 6
 	if historyHeight < 1 {
 		historyHeight = 1
 	}
+
+	input.SetWidth(width - 4)
+	input.SetHeight(inputHeight)
 
 	chatPanel := components.ChatPanel(theme, messages, contextLabel, width, historyHeight)
 	prompts := components.RenderQuickPrompts(theme, width)
@@ -31,6 +36,7 @@ func Chat(theme *core.Theme, session *review.ReviewSession, messages []core.Chat
 	return lipgloss.JoinVertical(lipgloss.Left,
 		theme.PanelTitleStyle.Render("Chat with Zero"),
 		chatPanel,
+		input.View(),
 		prompts,
 	)
 }

@@ -80,16 +80,21 @@ func BuildSettingsForm(values *SettingsValues) *huh.Form {
 				).
 				Value(&values.DefaultPostMode),
 		),
-	).WithWidth(60).WithShowHelp(true)
+	).WithShowHelp(true)
 }
 
-// Settings renders the settings screen.
+// Settings renders the settings screen using the full content width.
 func Settings(theme *core.Theme, form *huh.Form, width, height int) string {
 	if form == nil {
 		return theme.PanelStyle.Width(width).Height(height).Render(theme.MutedText.Render("Form not initialized."))
 	}
-	// Huh forms manage their own height; top-align so the whole form is usable
-	// even when it is taller than the panel.
+
+	formW := width - 6
+	if formW < 40 {
+		formW = 40
+	}
+	form = form.WithWidth(formW)
+
 	return lipgloss.NewStyle().
 		Width(width).
 		Height(height).

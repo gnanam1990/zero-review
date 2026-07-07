@@ -2,6 +2,7 @@ package tui
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -23,19 +24,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Width = msg.Width
 		m.Height = msg.Height
 		m.ChatInput.SetWidth(m.Layout.ContentWidth - 6)
+		m.CommandInput.Width = m.Layout.ContentWidth - 8
 		return m, nil
 
 	case tea.KeyMsg:
-		// Always allow global quit/help first.
-		if key.Matches(msg, m.Keys.Quit) {
-			return m, tea.Quit
+		// When a command palette is open it owns every key.
+		if m.CommandOpen {
+			return m.handleCommandKey(msg)
 		}
-		if key.Matches(msg, m.Keys.Help) {
-			m.ShowHelp = !m.ShowHelp
-			return m, nil
-		}
-		// Esc cancels forms and modals before anything else.
-		if key.Matches(msg, m.Keys.Back) {
+
+		// Esc / back dismisses modals and navigates back. It must run before
+		// forms so that forms can be cancelled. In chat, only Esc navigates
+		// back; 'b' must reach the textarea as normal input.
+		isBack := key.Matches(msg, m.Keys.Back)
+		if isBack && !(m.Screen == core.ScreenChat && msg.String() != "esc") {
 			if m.Confirm != nil {
 				m.Confirm = nil
 				return m, nil
@@ -44,12 +46,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.ShowHelp = false
 				return m, nil
 			}
-			if m.Screen == core.ScreenFindingDetail {
-				m.Screen = core.ScreenFindings
-				return m, nil
-			}
 			if m.Screen == core.ScreenPRInput || m.Screen == core.ScreenSettings {
 				m.Screen = core.ScreenWelcome
+				return m, nil
+			}
+			if m.Screen == core.ScreenChat && msg.String() == "esc" {
+				m.Screen = core.ScreenFindings
+				if m.SelectedFinding == nil {
+					m.Screen = core.ScreenDashboard
+				}
+				m.ChatInput.Blur()
+				m.ChatInput.SetValue("")
+				return m, nil
+			}
+			if m.Screen == core.ScreenFindingDetail {
+				m.Screen = core.ScreenFindings
 				return m, nil
 			}
 			if m.Screen != core.ScreenWelcome && m.Screen != core.ScreenDashboard {
@@ -58,7 +69,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Delegate to active Huh form first so Tab/↑/↓/Enter actually reach it.
+		// Delegate to active Huh forms. They need every key except the ones
+		// already handled above. Alphabetic keys (q, b, etc.) must reach the
+		// form fields, so we cannot process global shortcuts before this.
 		if m.Screen == core.ScreenPRInput && m.PRForm != nil {
 			f, cmd := m.PRForm.Update(msg)
 			if form, ok := f.(*huh.Form); ok {
@@ -93,20 +106,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// isTypingScreen returns true when the user is actively entering text so that
+// single-letter global shortcuts (q, b, etc.) are not swallowed.
+func isTypingScreen(screen core.Screen) bool {
+	return screen == core.ScreenPRInput || screen == core.ScreenSettings || screen == core.ScreenChat
+}
+
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Global quit
-	if key.Matches(msg, m.Keys.Quit) {
-		return m, tea.Quit
+	if !isTypingScreen(m.Screen) {
+		if key.Matches(msg, m.Keys.Quit) {
+			return m, tea.Quit
+		}
+		if key.Matches(msg, m.Keys.Help) {
+			m.ShowHelp = !m.ShowHelp
+			return m, nil
+		}
 	}
 
-	// Help toggle
-	if key.Matches(msg, m.Keys.Help) {
-		m.ShowHelp = !m.ShowHelp
-		return m, nil
-	}
-
-	// Dismiss modal/toast
-	if key.Matches(msg, m.Keys.Back) {
+	// Dismiss modal/toast as a fallback for screens without specific handlers.
+	// Typing screens (chat/forms) handle their own keys, so 'b' must not
+	// be interpreted as a back shortcut there.
+	if key.Matches(msg, m.Keys.Back) && !isTypingScreen(m.Screen) {
 		if m.Confirm != nil {
 			m.Confirm = nil
 			return m, nil
@@ -125,35 +145,23 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Navigation shortcuts (only on review screens, not on Welcome/forms)
-	if m.Screen != core.ScreenWelcome && m.Screen != core.ScreenPRInput && m.Screen != core.ScreenSettings {
-		if key.Matches(msg, m.Keys.Overview) {
-			m.Screen = core.ScreenDashboard
-			return m, nil
-		}
-		if key.Matches(msg, m.Keys.Findings) {
-			m.Screen = core.ScreenFindings
-			return m, nil
-		}
-		if key.Matches(msg, m.Keys.Diff) {
-			m.Screen = core.ScreenDiff
-			return m, nil
-		}
-		if key.Matches(msg, m.Keys.Chat) {
-			m.Screen = core.ScreenChat
-			return m, nil
-		}
-		if key.Matches(msg, m.Keys.Post) {
-			m.Screen = core.ScreenApproval
-			return m, nil
-		}
-		if key.Matches(msg, m.Keys.Save) && m.Session != nil {
-			m.Session.ReportPath = ".zero-review/reports/pr-123-demo.md"
-			m.SetToast("Report saved", "success")
-			return m, nil
+	// Dashboard-only shortcut to start a review when nothing is loaded.
+	if m.Screen == core.ScreenDashboard && m.Session == nil {
+		if msg.String() == "s" {
+			m.WelcomeFocus = 0
+			return m.activateWelcomeFocus()
 		}
 	}
 
+	// Command palette toggles on every non-typing screen.
+	if key.Matches(msg, m.Keys.Command) && !isTypingScreen(m.Screen) {
+		m.CommandOpen = true
+		m.CommandInput.Focus()
+		m.CommandInput.SetValue("")
+		return m, nil
+	}
+
+	// Screen-specific handlers consume their own contextual shortcuts.
 	switch m.Screen {
 	case core.ScreenWelcome:
 		return m.handleWelcomeKey(msg)
@@ -169,7 +177,144 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleReportKey(msg)
 	}
 
+	// Global navigation shortcuts as a fallback for screens that don't define
+	// their own (Dashboard, Diff, LoadingReview, etc.).
+	if !isTypingScreen(m.Screen) {
+		if key.Matches(msg, m.Keys.Overview) {
+			m.Screen = core.ScreenDashboard
+			return m, nil
+		}
+		if key.Matches(msg, m.Keys.Findings) && m.Session != nil {
+			m.Screen = core.ScreenFindings
+			return m, nil
+		}
+		if key.Matches(msg, m.Keys.Diff) && m.Session != nil {
+			m.Screen = core.ScreenDiff
+			return m, nil
+		}
+		if key.Matches(msg, m.Keys.Chat) && m.Session != nil {
+			m.Screen = core.ScreenChat
+			m.ChatInput.Focus()
+			return m, nil
+		}
+		if key.Matches(msg, m.Keys.Post) && m.Session != nil {
+			m.Screen = core.ScreenApproval
+			return m, nil
+		}
+		if key.Matches(msg, m.Keys.Save) && m.Session != nil {
+			m.Session.ReportPath = ".zero-review/reports/pr-123-demo.md"
+			m.SetToast("Report saved", "success")
+			return m, nil
+		}
+	}
+
 	return m, nil
+}
+
+func (m Model) handleCommandKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "esc", "b":
+		m.CommandOpen = false
+		m.CommandInput.Blur()
+		return m, nil
+	case "enter":
+		return m.executeCommand(m.CommandInput.Value())
+	default:
+		var cmd tea.Cmd
+		m.CommandInput, cmd = m.CommandInput.Update(msg)
+		return m, cmd
+	}
+}
+
+func (m Model) executeCommand(query string) (tea.Model, tea.Cmd) {
+	query = normalizeCommand(query)
+	if query == "" {
+		m.CommandOpen = false
+		m.CommandInput.Blur()
+		return m, nil
+	}
+
+	switch query {
+	case "quit", "q":
+		return m, tea.Quit
+	case "overview", "o":
+		m.CommandOpen = false
+		m.Screen = core.ScreenDashboard
+	case "findings", "f":
+		m.CommandOpen = false
+		if m.Session != nil {
+			m.Screen = core.ScreenFindings
+		} else {
+			m.SetToast("No review loaded", "error")
+		}
+	case "diff", "d":
+		m.CommandOpen = false
+		if m.Session != nil {
+			m.Screen = core.ScreenDiff
+		} else {
+			m.SetToast("No review loaded", "error")
+		}
+	case "chat", "c":
+		m.CommandOpen = false
+		if m.Session != nil {
+			m.Screen = core.ScreenChat
+			m.ChatInput.Focus()
+		} else {
+			m.SetToast("No review loaded", "error")
+		}
+	case "approval", "p", "post":
+		m.CommandOpen = false
+		if m.Session != nil {
+			m.Screen = core.ScreenApproval
+		} else {
+			m.SetToast("No review loaded", "error")
+		}
+	case "report":
+		m.CommandOpen = false
+		if m.Session != nil {
+			m.Screen = core.ScreenReport
+		} else {
+			m.SetToast("No review loaded", "error")
+		}
+	case "settings":
+		m.CommandOpen = false
+		m.SettingsForm = screens.BuildSettingsForm(&screens.SettingsValues{
+			Provider:          m.Provider,
+			Mode:              m.Mode,
+			Confidence:        strconv.Itoa(m.Config.ConfidenceMin),
+			AutoSave:          m.SaveReport,
+			Theme:             "auto",
+			ShowLowConfidence: false,
+			DefaultPostMode:   "comment",
+		})
+		m.Screen = core.ScreenSettings
+		return m, m.SettingsForm.Init()
+	case "save report", "save":
+		m.CommandOpen = false
+		if m.Session != nil {
+			m.Session.ReportPath = ".zero-review/reports/pr-123-demo.md"
+			m.SetToast("Report saved", "success")
+		} else {
+			m.SetToast("No review loaded", "error")
+		}
+	case "post review":
+		m.CommandOpen = false
+		if m.Session != nil {
+			m.Screen = core.ScreenApproval
+		} else {
+			m.SetToast("No review loaded", "error")
+		}
+	default:
+		m.SetToast("Unknown command: "+query, "error")
+	}
+	m.CommandInput.Blur()
+	return m, nil
+}
+
+func normalizeCommand(s string) string {
+	return strings.TrimSpace(strings.ToLower(s))
 }
 
 func (m Model) handleWelcomeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -254,7 +399,6 @@ func (m Model) handleFindingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if len(filtered) == 0 {
 		if msg.String() == "x" {
 			m.SeverityFilter = ""
-			return m, nil
 		}
 		return m, nil
 	}
@@ -269,8 +413,11 @@ func (m Model) handleFindingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.FindingsCursor++
 		}
 	case "enter":
-		m.SelectedFinding = &m.FindingsCursor
-		m.Screen = core.ScreenFindingDetail
+		idx := realIndex(m.Session.Findings, filtered, m.FindingsCursor)
+		if idx >= 0 {
+			m.SelectedFinding = &idx
+			m.Screen = core.ScreenFindingDetail
+		}
 	case "a":
 		idx := realIndex(m.Session.Findings, filtered, m.FindingsCursor)
 		if idx >= 0 {
@@ -297,6 +444,7 @@ func (m Model) handleFindingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if idx >= 0 {
 			m.SelectedFinding = &idx
 			m.Screen = core.ScreenChat
+			m.ChatInput.Focus()
 			m.ChatInput.SetValue(m.Session.Findings[idx].SuggestedComment)
 		}
 	case "c":
@@ -304,6 +452,7 @@ func (m Model) handleFindingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if idx >= 0 {
 			m.SelectedFinding = &idx
 			m.Screen = core.ScreenChat
+			m.ChatInput.Focus()
 		}
 	case "d":
 		idx := realIndex(m.Session.Findings, filtered, m.FindingsCursor)
@@ -311,6 +460,8 @@ func (m Model) handleFindingsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.SelectedFinding = &idx
 			m.Screen = core.ScreenDiff
 		}
+	case "b", "esc":
+		m.Screen = core.ScreenDashboard
 	case "1":
 		m.SeverityFilter = "high"
 	case "2":
@@ -352,20 +503,30 @@ func (m Model) handleFindingDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.SetToast("Finding rejected", "info")
 	case "e":
 		m.Screen = core.ScreenChat
+		m.ChatInput.Focus()
 		m.ChatInput.SetValue(f.SuggestedComment)
 	case "c":
 		m.Screen = core.ScreenChat
+		m.ChatInput.Focus()
 	case "d":
 		m.Screen = core.ScreenDiff
+	case "esc", "b":
+		m.Screen = core.ScreenFindings
 	}
 	return m, nil
 }
 
 func (m Model) handleChatKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "b":
+	case "esc":
+		// This is normally handled at the Update level before reaching here;
+		// keeping it makes the chat handler self-contained.
 		m.Screen = core.ScreenFindings
+		if m.SelectedFinding == nil {
+			m.Screen = core.ScreenDashboard
+		}
 		m.ChatInput.Blur()
+		m.ChatInput.SetValue("")
 		return m, nil
 	case "ctrl+l":
 		m.ChatMessages = nil
@@ -402,11 +563,14 @@ func (m Model) handleApprovalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			Action:  "post",
 		}
 	case "m":
-		// Cycle modes for demo
+		m.PostMode = nextPostMode(m.PostMode)
+		m.SetToast("Mode: "+modeLabel(m.PostMode), "info")
 		return m, nil
 	case "s":
-		m.Session.ReportPath = ".zero-review/reports/pr-123-demo.md"
-		m.SetToast("Report saved", "success")
+		if m.Session != nil {
+			m.Session.ReportPath = ".zero-review/reports/pr-123-demo.md"
+			m.SetToast("Report saved", "success")
+		}
 	case "y":
 		if m.Confirm != nil {
 			m.Confirm = nil
@@ -421,6 +585,9 @@ func (m Model) handleApprovalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "n":
 		m.Confirm = nil
+	case "esc", "b":
+		m.Confirm = nil
+		m.Screen = core.ScreenDashboard
 	}
 	return m, nil
 }
@@ -428,6 +595,8 @@ func (m Model) handleApprovalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleReportKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter", "o":
+		m.Screen = core.ScreenDashboard
+	case "esc", "b":
 		m.Screen = core.ScreenDashboard
 	case "q":
 		return m, tea.Quit
@@ -487,4 +656,21 @@ func (m Model) advanceLoading() (tea.Model, tea.Cmd) {
 
 func tickCmd() tea.Cmd {
 	return tea.Tick(400*time.Millisecond, func(t time.Time) tea.Msg { return tickMsg(t) })
+}
+
+func nextPostMode(m screens.PostMode) screens.PostMode {
+	switch m {
+	case screens.PostModeComment:
+		return screens.PostModeRequestChanges
+	case screens.PostModeRequestChanges:
+		return screens.PostModeApprove
+	case screens.PostModeApprove:
+		return screens.PostModeReportOnly
+	default:
+		return screens.PostModeComment
+	}
+}
+
+func modeLabel(m screens.PostMode) string {
+	return screens.ModeLabel(m)
 }
