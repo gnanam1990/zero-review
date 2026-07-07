@@ -72,7 +72,6 @@ func PRInput(theme *core.Theme, form *huh.Form, width, height int) string {
 	return lipgloss.NewStyle().
 		Width(width).
 		Height(height).
-		Align(lipgloss.Center).
-		AlignVertical(lipgloss.Center).
+		Padding(1, 2).
 		Render(form.View())
 }

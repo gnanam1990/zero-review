@@ -88,10 +88,11 @@ func Settings(theme *core.Theme, form *huh.Form, width, height int) string {
 	if form == nil {
 		return theme.PanelStyle.Width(width).Height(height).Render(theme.MutedText.Render("Form not initialized."))
 	}
+	// Huh forms manage their own height; top-align so the whole form is usable
+	// even when it is taller than the panel.
 	return lipgloss.NewStyle().
 		Width(width).
 		Height(height).
-		Align(lipgloss.Center).
-		AlignVertical(lipgloss.Center).
+		Padding(1, 2).
 		Render(form.View())
 }
