@@ -87,6 +87,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.Screen = core.ScreenFindings
 			return m, nil
 		}
+		// On forms, Esc just cancels back to Welcome instead of going to Dashboard.
+		if m.Screen == core.ScreenPRInput || m.Screen == core.ScreenSettings {
+			m.Screen = core.ScreenWelcome
+			return m, nil
+		}
 		if m.Screen != core.ScreenWelcome && m.Screen != core.ScreenDashboard {
 			m.Screen = core.ScreenDashboard
 			return m, nil
